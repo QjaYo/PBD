@@ -14,13 +14,17 @@ class Particles:
         self.x            = ti.Vector.field(3, dtype=ti.f32, shape=n)  # 현재 위치
         self.v            = ti.Vector.field(3, dtype=ti.f32, shape=n)  # 속도
         self.x_pred       = ti.Vector.field(3, dtype=ti.f32, shape=n)  # 예측 위치
+        self.dx_coll      = ti.Vector.field(3, dtype=ti.f32, shape=n)  # 충돌로 인한 위치 보정량
         self.w            = ti.field(dtype=ti.f32, shape=n)            # inv_mass (= 1/m), 0 = 고정
+        self.was_moving   = ti.field(dtype=ti.i32, shape=n)            # 0: 정지, 1: 운동 (이전 substep 상태)
         self.n_dist_constraints = ti.field(dtype=ti.f32, shape=n)       # 파티클당 참여 거리 제약 수
         self.n_vol_constraints  = ti.field(dtype=ti.f32, shape=n)       # 파티클당 참여 부피 제약 수
 
         self.x.from_numpy(positions.astype('float32'))
         self.v.fill(0.0)
         self.x_pred.fill(0.0)
+        self.dx_coll.fill(0.0)
         self.w.from_numpy(w.astype('float32'))
+        self.was_moving.fill(0)
         self.n_dist_constraints.fill(0.0)
         self.n_vol_constraints.fill(0.0)

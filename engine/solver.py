@@ -1,13 +1,14 @@
 import taichi as ti
 
-from engine.constraint import distance_constraint, volume_constraint, floor_constraint
+from engine.constraint import distance_constraint, volume_constraint, collision_constraint
 
-EPSILON      = 1e-8   # 거리 제약 denom 체크 (그래디언트가 단위벡터 스케일)
-EPSILON_VOL  = 1e-20  # 부피 제약 denom 체크 (그래디언트가 l^2 스케일 → denom은 l^4 ≈ 1e-9)
+EPSILON_DIST = 1e-8
+EPSILON_VOL  = 1e-20
+EPSILON_COLL = 1e-8
 
 
 @ti.kernel
-def project_distance(
+def distance_projection(
     particles: ti.template(),
     edges: ti.template(),
     rest_lengths: ti.template(),
@@ -26,13 +27,13 @@ def project_distance(
 
         diff = p1 - p0
         length = diff.norm()
-        if length < EPSILON:
+        if length < EPSILON_DIST:
             continue
 
         C, grad0, grad1 = distance_constraint(p0, p1, rest_lengths[i])
 
         denom = w0 * grad0.norm_sqr() + w1 * grad1.norm_sqr()
-        if denom < EPSILON:
+        if denom < EPSILON_DIST:
             continue
 
         s = C / denom
@@ -41,7 +42,7 @@ def project_distance(
 
 
 @ti.kernel
-def project_volume(
+def volume_projection(
     particles: ti.template(),
     tet_elems: ti.template(),
     rest_volumes: ti.template(),
@@ -72,16 +73,23 @@ def project_volume(
 
 
 @ti.kernel
-def project_floor(particles: ti.template()):
+def collision_projection(particles: ti.template()):
     for i in particles.x_pred:
-        C, grad = floor_constraint(particles.x_pred[i])
+        C, grad = collision_constraint(particles.x_pred[i])
         if C >= 0.0:
             continue
         w = particles.w[i]
         if w == 0.0:
             continue
-        s = C / (w * grad.norm_sqr())
-        particles.x_pred[i] -= s * w * grad
+
+        denom = w * grad.norm_sqr()
+        if denom < EPSILON_COLL:
+            continue
+        s = C / denom
+        
+        correction = - s * w * grad
+        particles.x_pred[i] += correction
+        particles.dx_coll[i] += correction
 
 
 class ConstraintSolver:
@@ -93,7 +101,7 @@ class ConstraintSolver:
         self.internal_constraints.append((fn, args))
 
     def generate_collision_constraints(self, particles):
-        self.collision_constraints = [(project_floor, (particles,))]
+        self.collision_constraints = [(collision_projection, (particles,))]
 
     def solve(self, n_iter):
         for _ in range(n_iter):

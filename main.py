@@ -6,7 +6,8 @@ from renderer import Renderer
 from engine.particles import Particles
 from engine.integrator import apply_external_forces, predict_positions, update
 from engine.friction import apply_floor_friction
-from engine.solver import project_distance, project_volume, ConstraintSolver
+from engine.solver import distance_projection, volume_projection, ConstraintSolver
+from engine.damping import damp_velocities
 
 ti.init(arch=ti.metal)
 
@@ -55,24 +56,28 @@ mu_s               = 1.0   # 정지마찰계수
 mu_k               = 1.0   # 운동마찰계수
 k_distance         = 0.99  # 원래 stiffness (0~1 범위)
 k_volume           = 1.0  # 원래 stiffness
+k_damping          = 0.01  # 댐핑 계수 (0~1 범위)
 # 논문 3.3절: k' = 1 - (1-k)^(1/n_iter) → n_iter에 독립적인 강성
 stiffness_distance = float(1.0 - (1.0 - k_distance) ** (1.0 / n_iter))
 stiffness_volume   = float(1.0 - (1.0 - k_volume)   ** (1.0 / n_iter))
 
 solver = ConstraintSolver()
-solver.register(project_distance, particles, edges_field, rest_lengths_field, stiffness_distance)
-solver.register(project_volume, particles, tet_elems_field, rest_volumes_field, stiffness_volume)
+solver.register(distance_projection, particles, edges_field, rest_lengths_field, stiffness_distance)
+solver.register(volume_projection, particles, tet_elems_field, rest_volumes_field, stiffness_volume)
 
 renderer = Renderer(particles, surface_faces)
 
 # ── (4) 메인 루프 ─────────────────────────────────────────────────────────────
 while renderer.is_running():
     for _ in range(n_substeps):
+        # 초기화
+        particles.dx_coll.fill(0.0)
+
         # (5) 외력 적용
         apply_external_forces(particles, dt)
 
         # (6) 댐핑
-        # damp_velocities(particles, k_damping)
+        damp_velocities(particles, k_damping)
 
         # (7) 예측 위치
         predict_positions(particles, dt)
@@ -87,6 +92,6 @@ while renderer.is_running():
         update(particles, dt)
 
         # (16) 바닥 마찰
-        apply_floor_friction(particles, FLOOR_Y, mu_s, mu_k)
+        apply_floor_friction(particles, mu_s, mu_k, dt)
 
     renderer.render()

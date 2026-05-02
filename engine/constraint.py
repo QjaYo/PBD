@@ -42,7 +42,8 @@ def volume_constraint(p0: ti.math.vec3, p1: ti.math.vec3, p2: ti.math.vec3, p3: 
 
 
 @ti.func
-def floor_constraint(p: ti.math.vec3):
+def collision_constraint(p: ti.math.vec3):
+    # floor collision
     """
     바닥 충돌 제약 (inequality: C < 0 일 때만 적용)
     C = p.y - FLOOR_Y
