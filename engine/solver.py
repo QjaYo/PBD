@@ -73,9 +73,9 @@ def volume_projection(
 
 
 @ti.kernel
-def collision_projection(particles: ti.template()):
+def collision_projection(particles: ti.template(), floor_y: ti.f32):
     for i in particles.x_pred:
-        C, grad = collision_constraint(particles.x_pred[i])
+        C, grad = collision_constraint(particles.x_pred[i], floor_y)
         if C >= 0.0:
             continue
         w = particles.w[i]
@@ -100,8 +100,8 @@ class ConstraintSolver:
     def register(self, fn, *args):
         self.internal_constraints.append((fn, args))
 
-    def generate_collision_constraints(self, particles):
-        self.collision_constraints = [(collision_projection, (particles,))]
+    def generate_collision_constraints(self, particles, floor_y: float):
+        self.collision_constraints = [(collision_projection, (particles, floor_y))]
 
     def solve(self, n_iter):
         for _ in range(n_iter):

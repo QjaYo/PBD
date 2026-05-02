@@ -1,7 +1,5 @@
 import taichi as ti
 
-from scene import FLOOR_Y
-
 
 @ti.func
 def distance_constraint(p0: ti.math.vec3, p1: ti.math.vec3, rest_length: ti.f32):
@@ -42,14 +40,14 @@ def volume_constraint(p0: ti.math.vec3, p1: ti.math.vec3, p2: ti.math.vec3, p3: 
 
 
 @ti.func
-def collision_constraint(p: ti.math.vec3):
+def collision_constraint(p: ti.math.vec3, floor_y: ti.f32):
     # floor collision
     """
     바닥 충돌 제약 (inequality: C < 0 일 때만 적용)
-    C = p.y - FLOOR_Y
+    C = p.y - floor_y
     ∇C = (0, 1, 0)
     반환: C, ∇C
     """
-    C = p.y - FLOOR_Y
+    C = p.y - floor_y
     grad = ti.math.vec3(0.0, 1.0, 0.0)
     return C, grad

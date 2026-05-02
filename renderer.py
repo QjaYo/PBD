@@ -12,7 +12,8 @@ class Renderer:
         self._last_time = time.time()
 
         # GGUI 윈도우 & 씬
-        self.window = ti.ui.Window(title, res=(1024, 768))
+        self.res = (1024, 768)
+        self.window = ti.ui.Window(title, res=self.res)
         self.canvas = self.window.get_canvas()
         self.scene  = self.window.get_scene()
         self.camera = ti.ui.Camera()
@@ -26,21 +27,37 @@ class Renderer:
         self.indices = ti.field(dtype=ti.i32, shape=len(surface_faces) * 3)
         self.indices.from_numpy(surface_faces.flatten().astype(np.int32))
 
-        # 바닥 메시 (FLOOR_Y 높이의 사각형 평면, 삼각형 2개)
-        floor_verts = np.array([
-            [-1.0, FLOOR_Y, -1.0],
-            [ 1.0, FLOOR_Y, -1.0],
-            [ 1.0, FLOOR_Y,  1.0],
-            [-1.0, FLOOR_Y,  1.0],
+        # 바닥 메시 (사각형 평면, 삼각형 2개) — y는 set_floor_y로 갱신
+        self._floor_xz = np.array([
+            [-1.0, -1.0],
+            [ 1.0, -1.0],
+            [ 1.0,  1.0],
+            [-1.0,  1.0],
         ], dtype=np.float32)
         floor_faces = np.array([0, 1, 2, 0, 2, 3], dtype=np.int32)
 
         self.floor_verts = ti.Vector.field(3, dtype=ti.f32, shape=4)
-        self.floor_verts.from_numpy(floor_verts)
         self.floor_indices = ti.field(dtype=ti.i32, shape=6)
         self.floor_indices.from_numpy(floor_faces)
+        self.set_floor_y(FLOOR_Y)
 
-    def render(self):
+    def set_floor_y(self, y: float):
+        verts = np.empty((4, 3), dtype=np.float32)
+        verts[:, 0] = self._floor_xz[:, 0]
+        verts[:, 1] = y
+        verts[:, 2] = self._floor_xz[:, 1]
+        self.floor_verts.from_numpy(verts)
+
+    def get_camera_state(self):
+        return (np.array(self.camera.curr_position, dtype=np.float32),
+                np.array(self.camera.curr_lookat,   dtype=np.float32),
+                np.array(self.camera.curr_up,       dtype=np.float32))
+
+    @property
+    def aspect(self):
+        return self.res[0] / self.res[1]
+
+    def render(self, sel_label: str = "None", floor_move: bool = False):
         # 60 FPS 제한
         now = time.time()
         elapsed = now - self._last_time
@@ -48,7 +65,7 @@ class Renderer:
             time.sleep(self.frame_dt - elapsed)
         self._last_time = time.time()
 
-        # 마우스 좌클릭 드래그로 카메라 회전
+        # 마우스 우클릭 드래그로 카메라 회전 (LMB는 picking에 사용)
         self.camera.track_user_inputs(self.window, movement_speed=0.01, hold_key=ti.ui.RMB)
         self.scene.set_camera(self.camera)
 
@@ -61,6 +78,12 @@ class Renderer:
 
         # 메시 렌더링
         self.scene.mesh(self.particles.x, indices=self.indices, color=(0.5, 0.5, 0.5))
+
+        # 좌상단 상태 GUI
+        gui = self.window.get_gui()
+        with gui.sub_window("Status", 0.01, 0.01, 0.25, 0.12):
+            gui.text(f"Selected: {sel_label}")
+            gui.text(f"Floor move (F): {'ON' if floor_move else 'OFF'}")
 
         self.canvas.scene(self.scene)
         self.window.show()
